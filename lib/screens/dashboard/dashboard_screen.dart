@@ -37,12 +37,17 @@ class DashboardScreen extends ConsumerWidget {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.eco_rounded, color: theme.colorScheme.primary),
+              child: Image.asset(
+                'assets/images/logo_icon.png',
+                width: 24,
+                height: 24,
+                fit: BoxFit.contain,
+              ),
             ),
             const SizedBox(width: 10),
             Text(

@@ -78,27 +78,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Brand Icon
-                    Icon(
-                      Icons.eco_rounded,
-                      size: 80,
-                      color: theme.colorScheme.primary,
+                    // Brand Logo
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 140,
                     )
                         .animate()
                         .fade(duration: 500.ms)
                         .scale(delay: 200.ms, duration: 400.ms, curve: Curves.easeOutBack),
                     
                     const SizedBox(height: 16),
-                    
-                    // Brand Title
-                    Text(
-                      'NourishLink',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
-                    ).animate().fade(delay: 300.ms).slideY(begin: 0.2, curve: Curves.easeOutQuad),
                     
                     Text(
                       'Rescue Food. Nourish Lives.',

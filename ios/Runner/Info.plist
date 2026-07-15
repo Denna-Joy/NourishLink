@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>NourishLink needs access to your location to track food pickup and delivery routes.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>NourishLink needs access to your location to track food pickup and delivery routes in the background.</string>
 </dict>
 </plist>

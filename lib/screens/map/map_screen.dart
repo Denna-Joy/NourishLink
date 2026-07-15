@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -19,6 +21,8 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   GoogleMapController? _mapController;
   bool _isNavigatingSimulation = false;
+  
+  bool get _useMockMap => kIsWeb ? false : (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
   @override
   void dispose() {
@@ -185,21 +189,152 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Google Map
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: driverLatLng,
-              zoom: 14,
-            ),
-            markers: markers,
-            polylines: polylines,
-            zoomControlsEnabled: false,
-            myLocationButtonEnabled: false,
-            onMapCreated: (controller) {
-              _mapController = controller;
-              _updateCamera(locationState.latitude, locationState.longitude);
-            },
-          ),
+          // Google Map (or premium Desktop Simulator Map for unsupported environments)
+          _useMockMap
+              ? LayoutBuilder(
+                  builder: (context, constraints) {
+                    final size = Size(constraints.maxWidth, constraints.maxHeight);
+                    
+                    Offset getOffset(LatLng point) {
+                      final points = [driverLatLng, restaurantLatLng, charityLatLng];
+                      final minLat = points.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
+                      final maxLat = points.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
+                      final minLng = points.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
+                      final maxLng = points.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+
+                      double latSpan = maxLat - minLat;
+                      double lngSpan = maxLng - minLng;
+                      if (latSpan == 0) latSpan = 0.01;
+                      if (lngSpan == 0) lngSpan = 0.01;
+
+                      const paddingPercent = 0.25;
+                      final paddedMinLat = minLat - latSpan * paddingPercent;
+                      final paddedMaxLat = maxLat + latSpan * paddingPercent;
+                      final paddedMinLng = minLng - lngSpan * paddingPercent;
+                      final paddedMaxLng = maxLng + lngSpan * paddingPercent;
+
+                      final newLatSpan = paddedMaxLat - paddedMinLat;
+                      final newLngSpan = paddedMaxLng - paddedMinLng;
+
+                      final x = (point.longitude - paddedMinLng) / newLngSpan * size.width;
+                      final y = size.height - (point.latitude - paddedMinLat) / newLatSpan * size.height;
+
+                      return Offset(
+                        x.clamp(40.0, size.width - 40.0),
+                        y.clamp(140.0, size.height - 240.0), // keep away from top banner & bottom sheet
+                      );
+                    }
+
+                    final driverOffset = getOffset(driverLatLng);
+                    final restaurantOffset = getOffset(restaurantLatLng);
+                    final charityOffset = getOffset(charityLatLng);
+
+                    return Container(
+                      color: theme.brightness == Brightness.dark 
+                          ? const Color(0xFF1E1E24) 
+                          : const Color(0xFFF4F6F9),
+                      child: Stack(
+                        children: [
+                          // Grid pattern & Route Path Line
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: MapGridPainter(
+                                theme: theme,
+                                driverOffset: driverOffset,
+                                restaurantOffset: restaurantOffset,
+                                charityOffset: charityOffset,
+                                routePoints: activeDelivery.status == DeliveryStatus.accepted
+                                    ? [driverOffset, restaurantOffset]
+                                    : [driverOffset, charityOffset],
+                              ),
+                            ),
+                          ),
+
+                          // Charity Pin Label
+                          Positioned(
+                            left: charityOffset.dx - 60,
+                            top: charityOffset.dy - 60,
+                            child: _buildMapLabel(
+                              title: activeDelivery.charityName,
+                              color: Colors.green,
+                              icon: Icons.favorite_rounded,
+                            ),
+                          ),
+
+                          // Restaurant Pin Label
+                          Positioned(
+                            left: restaurantOffset.dx - 60,
+                            top: restaurantOffset.dy - 60,
+                            child: _buildMapLabel(
+                              title: activeDelivery.pickupRequest.restaurantName,
+                              color: Colors.orange,
+                              icon: Icons.restaurant_rounded,
+                            ),
+                          ),
+
+                          // Driver Pin Label
+                          Positioned(
+                            left: driverOffset.dx - 60,
+                            top: driverOffset.dy - 60,
+                            child: _buildMapLabel(
+                              title: 'You (Driver)',
+                              color: theme.colorScheme.primary,
+                              icon: Icons.navigation_rounded,
+                              isDriver: true,
+                              heading: locationState.heading,
+                            ),
+                          ),
+                          
+                          // Simulator Indicator Tag
+                          Positioned(
+                            top: 110,
+                            right: 16,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: theme.colorScheme.primary.withOpacity(0.5), width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.greenAccent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Desktop Map Simulator',
+                                    style: TextStyle(color: Colors.white75, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                )
+              : GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: driverLatLng,
+                    zoom: 14,
+                  ),
+                  markers: markers,
+                  polylines: polylines,
+                  zoomControlsEnabled: false,
+                  myLocationButtonEnabled: false,
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    _updateCamera(locationState.latitude, locationState.longitude);
+                  },
+                ),
 
           // Floating Top Indicator Panel (ETA, Speed/Heading details)
           Positioned(
@@ -397,5 +532,163 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
       bottomNavigationBar: const MainBottomNavBar(currentIndex: 1),
     );
+  }
+
+  Widget _buildMapLabel({
+    required String title,
+    required Color color,
+    required IconData icon,
+    bool isDriver = false,
+    double heading = 0.0,
+  }) {
+    return SizedBox(
+      width: 120,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.75),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (isDriver)
+            Transform.rotate(
+              angle: heading * (3.1415926535897932 / 180),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    )
+                  ],
+                ),
+                child: const Icon(
+                  Icons.navigation_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: color, width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 16,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class MapGridPainter extends CustomPainter {
+  final ThemeData theme;
+  final Offset driverOffset;
+  final Offset restaurantOffset;
+  final Offset charityOffset;
+  final List<Offset> routePoints;
+
+  MapGridPainter({
+    required this.theme,
+    required this.driverOffset,
+    required this.restaurantOffset,
+    required this.charityOffset,
+    required this.routePoints,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Draw background grid lines
+    final gridPaint = Paint()
+      ..color = (isDark ? Colors.white10 : Colors.black.withOpacity(0.04))
+      ..strokeWidth = 1.0;
+    
+    const double gridSize = 40.0;
+    for (double x = 0; x < size.width; x += gridSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += gridSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    // Draw route background shadow/glow line
+    if (routePoints.length >= 2) {
+      final glowPaint = Paint()
+        ..color = theme.colorScheme.primary.withOpacity(0.15)
+        ..strokeWidth = 8.0
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(routePoints[0], routePoints[1], glowPaint);
+
+      // Draw primary route line
+      final routePaint = Paint()
+        ..color = theme.colorScheme.primary
+        ..strokeWidth = 4.0
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+      
+      // Draw dotted/dashed line for premium styling
+      final path = Path()
+        ..moveTo(routePoints[0].dx, routePoints[0].dy)
+        ..lineTo(routePoints[1].dx, routePoints[1].dy);
+      
+      _drawDashedPath(canvas, path, routePaint);
+    }
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    const dashWidth = 8.0;
+    const dashSpace = 6.0;
+    
+    final metrics = path.computeMetrics();
+    for (final metric in metrics) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final start = distance;
+        final end = (distance + dashWidth).clamp(0.0, metric.length);
+        final extract = metric.extractPath(start, end);
+        canvas.drawPath(extract, paint);
+        distance += dashWidth + dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant MapGridPainter oldDelegate) {
+    return oldDelegate.driverOffset != driverOffset ||
+        oldDelegate.restaurantOffset != restaurantOffset ||
+        oldDelegate.charityOffset != charityOffset ||
+        oldDelegate.routePoints != routePoints;
   }
 }

@@ -310,7 +310,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   const SizedBox(width: 6),
                                   const Text(
                                     'Desktop Map Simulator',
-                                    style: TextStyle(color: Colors.white75, fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
